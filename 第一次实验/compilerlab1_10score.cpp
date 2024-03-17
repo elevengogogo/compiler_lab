@@ -97,7 +97,7 @@ void generateMIPS(const vector<Token>& tokens) {
                                 } else if (op == "-") {
                                     cout << "    sub $t0, $t0, $t1\n";
                                 } else if (op == "*") {
-                                    cout << "    mult $t0, $t1\n  mflo $t0\n";
+                                    cout << "    mult $t0, $t1\n  mflo $t0\n";
                                 } else if (op == "/") {
                                     cout << "    div $t0, $t1\n";
                                     cout << "    mflo $t0\n";
