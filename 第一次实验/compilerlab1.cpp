@@ -53,12 +53,12 @@ vector<Token> tokenize(const string& src) {
 void generateMIPS(const vector<Token>& tokens) {
     int variableOffset = 0;
     map<string, int> varMap;
-
+    
     for (size_t i = 0; i < tokens.size(); ++i) {
         if (tokens[i].type == TokenType::INT_KEYWORD) {
-            variableOffset -= 4;
+            variableOffset -= 4; //标识符对应类型的字节，因为本次实验只有INT，所以每次-4
             if (i + 1 < tokens.size() && tokens[i+1].type == TokenType::IDENTIFIER) {
-                varMap[tokens[i+1].value] = variableOffset; //varMap用于存储标识符对应类型的字节，用于设置偏移量
+                varMap[tokens[i+1].value] = variableOffset; //varMap用于存储标识符对应偏移量
                 cout << "    sw $zero, " << variableOffset << "($fp) # int " << tokens[i+1].value << "\n";
             }
             i += 2; // 跳过声明语句中的标识符和分号
@@ -69,42 +69,66 @@ void generateMIPS(const vector<Token>& tokens) {
                 cout << "    li $v0, " << tokens[i+2].value << " # " << varName << " = " << tokens[i+2].value << "\n";
                 cout << "    sw $v0, " << varMap[varName] << "($fp)\n";
             } else if (i + 4 < tokens.size() && tokens[i+3].type == TokenType::ARITH_OP) {
-                // 简单算术表达式处理，例如 a = b + c;
-                cout << "    lw $v0, " << varMap[tokens[i+2].value] << "($fp)  # 加载第一个操作数\n";
-                cout << "    sw $v0, " <<  "0($sp)  # 存储第一个操作数进栈顶\n";
+                string varName = tokens[i].value;
+                int offset = 2; // 跳过赋值符号
+                bool isFirstOperand = true;
                 
-                cout << "    addiu $sp, $sp, -4\n"; //进栈，移动指针
+                cout << "    # 开始处理表达式 " << varName << "\n";
+                while (i + offset < tokens.size() && tokens[i+offset].type != TokenType::SEMICOLON) {
+                    if (tokens[i+offset].type == TokenType::INTEGER_LITERAL || tokens[i+offset].type == TokenType::IDENTIFIER) {
+                        if (isFirstOperand) {
+                            if (tokens[i+offset].type == TokenType::INTEGER_LITERAL) {
+                                cout << "    li $t0, " << tokens[i+offset].value << " # 加载立即数\n";
+                            } else {
+                                cout << "    lw $t0, " << varMap[tokens[i+offset].value] << "($fp)  # 加载变量\n";
+                            }
+                            isFirstOperand = false;
+                        } else {
+                            if (tokens[i+offset].type == TokenType::INTEGER_LITERAL) {
+                                cout << "    li $t1, " << tokens[i+offset].value << " # 加载立即数\n";
+                            } else {
+                                cout << "    lw $t1, " << varMap[tokens[i+offset].value] << "($fp)  # 加载变量\n";
+                            }
+                            // 根据前一个操作符执行操作
+                            if (tokens[i+offset-1].type == TokenType::ARITH_OP) {
+                                string op = tokens[i+offset-1].value;
+                                if (op == "+") {
+                                    cout << "    add $t0, $t0, $t1\n";
+                                } else if (op == "-") {
+                                    cout << "    sub $t0, $t0, $t1\n";
+                                } else if (op == "*") {
+                                    cout << "    mult $t0, $t1\n  mflo $t0\n";
+                                } else if (op == "/") {
+                                    cout << "    div $t0, $t1\n";
+                                    cout << "    mflo $t0\n";
+                                }
+                            }
+                        }
+                    }
+                    offset++;
+                }
+                cout << "    sw $t0, " << varMap[varName] << "($fp)  # 保存结果到 " << varName << "\n";
+                i += offset; // 跳过处理过的表达式
+            }
+            else {
+                string varName = tokens[i].value;
+                int offset = 2; // 跳过赋值符号
                 
-                cout << "    lw $v0, " << varMap[tokens[i+4].value] << "($fp)  # 加载第二个操作数\n";
-                cout << "    sw $v0, " <<  "0($sp)  # 存储第二个操作数进栈顶\n";
-                
-                cout << "    addiu $sp, $sp, -4\n";  //进栈，移动指针
-                
-                cout << "    lw $t1, " <<  "4($sp)  # 从栈里取出第二个操作数\n";
-                cout << "    lw $t0, " <<  "8($sp)  # 从栈里取出第一个操作数\n";
-                
-                
-
-                if (tokens[i+3].value == "+") {
-                    cout << "    add $t0, $t0, $t1  # 执行加法\n";
-                } else if (tokens[i+3].value == "-") {
-                    cout << "    sub $t0, $t0, $t1  # 执行减法\n";
-                } else if (tokens[i+3].value == "*") {
-                    cout << "    mul $t0, $t0, $t1  # 执行乘法\n";
-                } else if (tokens[i+3].value == "/") {
-                    cout << "    div $t0, $t1  # 执行除法，注意除法后结果在lo寄存器\n";
-                    cout << "    mflo $t0  # 从lo寄存器移动结果到$t0\n";
+                cout << "    # 开始处理表达式 " << varName << "\n";
+                if (tokens[i+offset].type == TokenType::INTEGER_LITERAL || tokens[i+offset].type == TokenType::IDENTIFIER) {
+                    
+                    if (tokens[i+offset].type == TokenType::INTEGER_LITERAL) {
+                        cout << "    li $t0, " << tokens[i+offset].value << " # 加载立即数\n";
+                    } else {
+                        cout << "    lw $t0, " << varMap[tokens[i+offset].value] << "($fp)  # 加载变量\n";
+                    }
+                    cout <<"sw $t0," <<varMap[tokens[i].value]<<"($fp)  # 赋值\n";
                 }
                 
-                cout << "sw $t0, 8($sp)\n";
-                cout << "addiu $sp, $sp, 4\n";
-                cout << "lw $v0, 4($sp)\n";
-
+                //i += offset; // 跳过处理过的表达式
             }
-        } else if (tokens[i].type == TokenType::RETURN_KEYWORD) {
-//cout << "    move $v0, " << varMap[tokens[i+1].value] << "$t0  加载返回值\n";
-            cout << "    sw $v0, "<<varMap[tokens[i+1].value]<<"($fp)\n";
-            cout << "    addiu $sp, $sp, 4\n";
+        }
+        else if (tokens[i].type == TokenType::RETURN_KEYWORD) {
             cout << "    lw $v0, " << varMap[tokens[i+1].value]<<"($fp)\n";
             break;
         }
