@@ -16,7 +16,7 @@ add_compile_options(-pedantic)
 # add_link_options(-fsanitize=address)
 add_executable(Compilerlab2
     main.cpp
-    parser.cpp
+#    parser.cpp
     utils.cpp
     asm_writer.cpp
     ${FLEX_MyScanner_OUTPUTS}
